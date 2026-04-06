@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel Admin — Checklist Camionetas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --teal: #00A499; --teal-dark: #007f76;
+  --orange: #D95A1E;
+  --bg: #f5f4f0; --surface: #ffffff;
+  --border: #e2e0d8; --text: #1a1a18; --muted: #6b6a65;
+  --radius: 10px;
+  --font: 'IBM Plex Sans', sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); }
+
+.topbar { background: var(--teal); }
+.topbar-inner {
+  max-width: 900px; margin: 0 auto;
+  padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-title { font-size: 15px; font-weight: 600; color: white; }
+.topbar-sub { font-size: 11px; color: rgba(255,255,255,0.75); font-family: var(--mono); margin-top: 2px; }
+.topbar-links { display: flex; gap: 8px; }
+.topbar-links a {
+  color: rgba(255,255,255,0.85); font-size: 12px; text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.3); padding: 5px 10px; border-radius: 6px;
+}
+.topbar-links a:hover { background: rgba(255,255,255,0.15); }
+
+.wrap { max-width: 900px; margin: 0 auto; padding: 20px 14px 60px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.stat-label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-val { font-size: 26px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em; }
+.stat-val.ok { color: var(--teal); }
+.stat-val.warn { color: var(--orange); }
+
+.filters {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+  display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  align-items: center;
+}
+.filters input, .filters select {
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 7px 11px; font-size: 13px; font-family: var(--font);
+  background: #fdfcfa; color: var(--text); min-width: 140px;
+}
+.filters input:focus, .filters select:focus { outline: none; border-color: var(--teal); }
+.btn-refresh {
+  background: var(--teal); color: white; border: none; border-radius: 7px;
+  padding: 7px 14px; font-size: 13px; font-weight: 600; font-family: var(--mono);
+  cursor: pointer; margin-left: auto;
+}
+.btn-refresh:active { transform: scale(0.97); }
+
+.records-table { width: 100%; border-collapse: collapse; }
+.records-table th {
+  background: #f9f8f5; border-bottom: 1px solid var(--border);
+  padding: 10px 12px; font-size: 11px; font-weight: 600;
+  color: var(--muted); text-align: left; font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  position: sticky; top: 0;
+}
+.records-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+.records-table tr:last-child td { border-bottom: none; }
+.records-table tr:hover td { background: #faf9f6; }
+
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: auto;
+}
+
+.patente-tag {
+  background: #eef8f7; color: var(--teal);
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  padding: 2px 8px; border-radius: 5px;
+}
+.badge-ok { background: #eef8f7; color: #007f76; font-size: 11px; font-weight: 600; font-family: var(--mono); padding: 2px 7px; border-radius: 4px; }
+.badge-malo { background: #fff3ed; color: var(--orange); font-size: 11px; font-weight: 600; font-family: var(--mono); padding: 2px 7px; border-radius: 4px; }
+
+.row-actions { display: flex; gap: 6px; }
+.btn-row {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; font-size: 11px; font-weight: 600; font-family: var(--mono);
+  cursor: pointer; background: var(--surface); color: var(--text);
+  white-space: nowrap;
+}
+.btn-row:hover { background: #f5f4f0; }
+.btn-row.danger { color: var(--orange); border-color: #f0c0a0; }
+.btn-row.danger:hover { background: #fff8f4; }
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 200;
+  align-items: center; justify-content: center; padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--surface); border-radius: 12px;
+  max-width: 560px; width: 100%; max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal-head {
+  background: var(--teal); color: white; padding: 16px 20px;
+  border-radius: 12px 12px 0 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.modal-head h2 { font-size: 16px; font-weight: 600; }
+.modal-head p { font-size: 12px; opacity: 0.8; margin-top: 2px; font-family: var(--mono); }
+.modal-close { background: rgba(255,255,255,0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+.modal-body { padding: 20px; }
+
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.detail-item label { font-size: 11px; color: var(--muted); font-family: var(--mono); display: block; }
+.detail-item span { font-size: 14px; font-weight: 500; }
+
+.eq-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.eq-table th { background: #f9f8f5; padding: 7px 10px; text-align: left; font-size: 11px; color: var(--muted); font-family: var(--mono); border-bottom: 1px solid var(--border); }
+.eq-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.eq-table tr:last-child td { border-bottom: none; }
+
+.section-head { font-size: 11px; font-weight: 600; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+.empty-state { text-align: center; padding: 48px 16px; color: var(--muted); }
+.empty-state p { font-size: 14px; margin-top: 8px; }
+.spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid #e2e0d8; border-top-color: var(--teal); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <div class="topbar-title">Panel de Administración — Checklist Camionetas</div>
+      <div class="topbar-sub">LOMAS BAYAS · GLENCORE</div>
+    </div>
+    <div class="topbar-links">
+      <a href="index.html">+ Nuevo checklist</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total registros</div>
+      <div class="stat-val" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Este mes</div>
+      <div class="stat-val ok" id="stat-mes">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Con ítems Malo</div>
+      <div class="stat-val warn" id="stat-malo">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Vehículos únicos</div>
+      <div class="stat-val" id="stat-vehi">—</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="f-patente" placeholder="Patente..." oninput="applyFilters()">
+    <input type="text" id="f-inspector" placeholder="Inspector..." oninput="applyFilters()">
+    <input type="date" id="f-desde" onchange="applyFilters()">
+    <input type="date" id="f-hasta" onchange="applyFilters()">
+    <select id="f-estado" onchange="applyFilters()">
+      <option value="">Todos los estados</option>
+      <option value="ok">Sin ítems Malo</option>
+      <option value="malo">Con ítems Malo</option>
+    </select>
+    <button class="btn-refresh" onclick="loadRecords()">Actualizar</button>
+  </div>
+
+  <div class="table-wrap">
+    <div id="table-area">
+      <div class="empty-state"><div class="spinner"></div><p>Cargando registros...</p></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="modal-title">Detalle del checklist</h2>
+        <p id="modal-sub"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let allRecords = [];
+let filtered = [];
+
+async function loadRecords() {
+  document.getElementById('table-area').innerHTML =
+    '<div class="empty-state"><div class="spinner"></div><p>Cargando...</p></div>';
+  try {
+    const res = await fetch('/api/records');
+    allRecords = await res.json();
+    updateStats();
+    applyFilters();
+  } catch(e) {
+    document.getElementById('table-area').innerHTML =
+      `<div class="empty-state"><p>Error al cargar: ${e.message}</p></div>`;
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = allRecords.length;
+  const now = new Date();
+  const thisMonth = allRecords.filter(r => {
+    const d = new Date(r.timestamp);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  document.getElementById('stat-mes').textContent = thisMonth.length;
+  const withMalo = allRecords.filter(r => (r.equipo||[]).some(i=>i.valor==='M'));
+  document.getElementById('stat-malo').textContent = withMalo.length;
+  const uniqueVehi = new Set(allRecords.map(r=>r.patente).filter(Boolean));
+  document.getElementById('stat-vehi').textContent = uniqueVehi.size;
+}
+
+function applyFilters() {
+  const pat = document.getElementById('f-patente').value.toLowerCase();
+  const insp = document.getElementById('f-inspector').value.toLowerCase();
+  const desde = document.getElementById('f-desde').value;
+  const hasta = document.getElementById('f-hasta').value;
+  const estado = document.getElementById('f-estado').value;
+
+  filtered = allRecords.filter(r => {
+    if (pat && !(r.patente||'').toLowerCase().includes(pat)) return false;
+    if (insp && !(r.inspector||'').toLowerCase().includes(insp)) return false;
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
+    const malos = (r.equipo||[]).filter(i=>i.valor==='M').length;
+    if (estado === 'ok' && malos > 0) return false;
+    if (estado === 'malo' && malos === 0) return false;
+    return true;
+  });
+  renderTable();
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  if (d.includes('T')) {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('es-CL') + ' ' + dt.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+  }
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function renderTable() {
+  if (filtered.length === 0) {
+    document.getElementById('table-area').innerHTML =
+      '<div class="empty-state"><p>No se encontraron registros</p></div>';
+    return;
+  }
+  let html = `<table class="records-table">
+    <thead><tr>
+      <th>Fecha</th><th>Patente</th><th>Marca / Modelo</th>
+      <th>Inspector</th><th>Km</th><th>Estado</th><th>Acciones</th>
+    </tr></thead><tbody>`;
+
+  filtered.forEach(r => {
+    const malos = (r.equipo||[]).filter(i=>i.valor==='M');
+    const estadoBadge = malos.length > 0
+      ? `<span class="badge-malo">${malos.length} MALO</span>`
+      : `<span class="badge-ok">OK</span>`;
+    html += `<tr>
+      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">${fmtDate(r.timestamp)}</td>
+      <td><span class="patente-tag">${r.patente||'—'}</span></td>
+      <td>${r.marca||'—'} ${r.modelo||''}</td>
+      <td>${r.inspector||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px">${r.km?r.km+' km':'—'}</td>
+      <td>${estadoBadge}</td>
+      <td><div class="row-actions">
+        <button class="btn-row" onclick="openModal('${r.id}')">Ver</button>
+        <button class="btn-row" onclick="downloadPDF('${r.id}')">PDF</button>
+        <button class="btn-row danger" onclick="deleteRecord('${r.id}')">Borrar</button>
+      </div></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('table-area').innerHTML = html;
+}
+
+function openModal(id) {
+  const r = allRecords.find(x=>x.id===id);
+  if (!r) return;
+  const malos = (r.equipo||[]).filter(i=>i.valor==='M');
+  document.getElementById('modal-title').textContent = `Checklist — ${r.patente||'Sin patente'}`;
+  document.getElementById('modal-sub').textContent = `${fmtDate(r.timestamp)} · ${r.inspector||''}`;
+
+  let body = `<div class="detail-grid">
+    <div class="detail-item"><label>Empresa</label><span>${r.empresa||'—'}</span></div>
+    <div class="detail-item"><label>Patente</label><span>${r.patente||'—'}</span></div>
+    <div class="detail-item"><label>Marca / Modelo</label><span>${r.marca||'—'} ${r.modelo||''}</span></div>
+    <div class="detail-item"><label>Kilometraje</label><span>${r.km?r.km+' km':'—'}</span></div>
+    <div class="detail-item"><label>Inspector</label><span>${r.inspector||'—'}</span></div>
+    <div class="detail-item"><label>Revisor</label><span>${r.revisor||'—'}</span></div>
+  </div>`;
+
+  if (malos.length > 0) {
+    body += `<div class="section-head" style="color:var(--orange);margin-bottom:8px">Ítems en condición Malo</div>
+    <table class="eq-table" style="margin-bottom:16px">
+      <thead><tr><th>Ítem</th><th>Observación</th></tr></thead><tbody>`;
+    malos.forEach(i => {
+      body += `<tr><td style="color:var(--orange)">${i.nombre}</td><td>${i.obs||'—'}</td></tr>`;
+    });
+    body += '</tbody></table>';
+  }
+
+  body += `<div class="section-head">Todos los ítems</div>
+  <table class="eq-table"><thead><tr><th>Ítem</th><th style="text-align:center">Estado</th></tr></thead><tbody>`;
+  (r.equipo||[]).forEach(i => {
+    const badge = i.valor==='B'
+      ? `<span class="badge-ok">B</span>`
+      : i.valor==='M'
+      ? `<span class="badge-malo">M</span>`
+      : `<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">N/A</span>`;
+    body += `<tr><td>${i.nombre}</td><td style="text-align:center">${badge}</td></tr>`;
+  });
+  body += '</tbody></table>';
+
+  if (r.obs_general) {
+    body += `<div class="section-head" style="margin-top:16px">Observaciones generales</div>
+    <p style="font-size:14px;line-height:1.5;color:var(--text)">${r.obs_general}</p>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay') || e.currentTarget === document.querySelector('.modal-close')) {
+    document.getElementById('modal-overlay').classList.remove('show');
+  }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  try {
+    await fetch(`/api/records?id=${id}`, { method: 'DELETE' });
+    allRecords = allRecords.filter(r=>r.id!==id);
+    updateStats(); applyFilters();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function downloadPDF(id) {
+  const r = allRecords.find(x=>x.id===id);
+  if (!r) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const teal = [0, 164, 153];
+  const orange = [217, 90, 30];
+  const gray = [107, 106, 101];
+  const lw = 180;
+  let y = 20;
+
+  doc.setFillColor(...teal);
+  doc.rect(15, 10, lw, 18, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('LISTA DE VERIFICACIÓN — CAMIONETAS', 105, 20, {align:'center'});
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(`LOMAS BAYAS · GLENCORE · ${fmtDate(r.timestamp)}`, 105, 26, {align:'center'});
+  y = 38;
+
+  doc.setTextColor(0,0,0);
+  const fields = [
+    ['Empresa', r.empresa||'—'], ['Patente', r.patente||'—'],
+    ['Marca / Modelo', `${r.marca||'—'} ${r.modelo||''}`], ['Km', r.km?r.km+' km':'—'],
+    ['Inspector', r.inspector||'—'], ['Revisor', r.revisor||'—'],
+  ];
+  doc.setFontSize(9);
+  fields.forEach((f,i) => {
+    const x = i%2===0 ? 15 : 105;
+    if (i%2===0 && i>0) y += 7;
+    doc.setTextColor(...gray); doc.text(f[0]+': ', x, y);
+    doc.setTextColor(0,0,0); doc.setFont('helvetica','bold');
+    doc.text(f[1], x + doc.getTextWidth(f[0]+': '), y);
+    doc.setFont('helvetica','normal');
+  });
+  y += 10;
+
+  doc.setFillColor(240,239,235);
+  doc.rect(15, y-5, lw, 7, 'F');
+  doc.setTextColor(...teal); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('CONDICIONES DEL EQUIPO', 18, y);
+  doc.text('B', 164, y); doc.text('M', 172, y); doc.text('N/A', 179, y);
+  y += 4; doc.setFont('helvetica','normal'); doc.setTextColor(0,0,0);
+
+  (r.equipo||[]).forEach(item => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    const lines = doc.splitTextToSize(item.nombre, 140);
+    doc.setFontSize(8);
+    lines.forEach((l,li) => doc.text(l, 18, y + li*4.5));
+    const rowH = lines.length * 4.5;
+    if (item.valor==='B') { doc.setTextColor(...teal); doc.setFont('helvetica','bold'); doc.text('✓', 165, y); }
+    else if (item.valor==='M') { doc.setTextColor(...orange); doc.setFont('helvetica','bold'); doc.text('✗', 173, y); }
+    else if (item.valor==='NA') { doc.setTextColor(...gray); doc.text('—', 180, y); }
+    doc.setTextColor(0,0,0); doc.setFont('helvetica','normal');
+    if (item.obs) { y += rowH; doc.setTextColor(...orange); doc.setFontSize(7); doc.text('→ ' + item.obs, 22, y); doc.setTextColor(0,0,0); doc.setFontSize(8); y += 5; }
+    else { y += rowH + 2; }
+    doc.setDrawColor(230,228,220); doc.line(15, y-1, 195, y-1);
+  });
+
+  if (r.obs_general) {
+    y += 5;
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...teal);
+    doc.text('OBSERVACIONES GENERALES', 18, y);
+    y += 5; doc.setFont('helvetica','normal'); doc.setTextColor(0,0,0); doc.setFontSize(8);
+    doc.splitTextToSize(r.obs_general, 170).forEach(l => { doc.text(l, 18, y); y += 4.5; });
+  }
+
+  doc.save(`checklist_${r.patente||'camioneta'}_${r.fecha||r.timestamp.split('T')[0]}.pdf`);
+}
+
+loadRecords();
+</script>
+</body>
+</html>
